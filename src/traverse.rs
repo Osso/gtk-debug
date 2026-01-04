@@ -2,13 +2,20 @@
 
 use gtk4::prelude::*;
 use gtk4::{self as gtk};
+use std::panic;
 
 use crate::output::{LayoutDump, LayoutEntry, WidgetInfo};
 
 /// Dump the widget tree starting from the given widget.
 pub fn dump_widget_tree(widget: &impl IsA<gtk::Widget>) -> LayoutDump {
     let mut dump = LayoutDump::new();
-    traverse_widget(widget.as_ref(), 0, &mut dump);
+    // Catch panics during traversal to prevent app crash
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        traverse_widget(widget.as_ref(), 0, &mut dump);
+    }));
+    if let Err(e) = result {
+        eprintln!("[gtk-debug] Panic during traversal: {:?}", e);
+    }
     dump
 }
 

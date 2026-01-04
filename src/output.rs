@@ -3,6 +3,18 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+/// Truncate a string to max_chars, adding "..." if truncated.
+/// Handles multi-byte UTF-8 characters correctly.
+fn truncate_str(s: &str, max_chars: usize) -> String {
+    let char_count = s.chars().count();
+    if char_count <= max_chars {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max_chars - 3).collect();
+        format!("{}...", truncated)
+    }
+}
+
 /// Information about a widget's type and content.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WidgetInfo {
@@ -69,11 +81,7 @@ impl WidgetInfo {
                 label.as_ref().map_or("Button".into(), |l| format!("Button \"{}\"", l))
             }
             Self::Label { text } => {
-                let truncated = if text.len() > 30 {
-                    format!("{}...", &text[..27])
-                } else {
-                    text.clone()
-                };
+                let truncated = truncate_str(text, 60);
                 format!("Label \"{}\"", truncated)
             }
             Self::Entry { placeholder, .. } => {

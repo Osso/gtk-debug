@@ -62,6 +62,13 @@ enum Commands {
         /// Process ID (auto-detect if only one server running)
         pid: Option<u32>,
     },
+    /// Send a key press event (e.g., "t", "Return", "Escape")
+    Key {
+        /// Key name (single char or GTK key name like "Return", "Escape")
+        key: String,
+        /// Process ID (auto-detect if only one server running)
+        pid: Option<u32>,
+    },
 }
 
 fn main() -> ExitCode {
@@ -190,6 +197,25 @@ fn main() -> ExitCode {
             match client::ping(&socket) {
                 Ok(()) => {
                     println!("Pong");
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        Commands::Key { key, pid } => {
+            let socket = match get_socket(pid) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    return ExitCode::FAILURE;
+                }
+            };
+            match client::key_press(&socket, &key) {
+                Ok(()) => {
+                    println!("Sent key '{}'", key);
                     ExitCode::SUCCESS
                 }
                 Err(e) => {

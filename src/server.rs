@@ -64,6 +64,8 @@ pub enum Request {
     Ping,
     /// Get layout as JSON instead of text.
     DumpJson,
+    /// Send a key press event.
+    KeyPress { key: String },
 }
 
 /// Response types sent over IPC.
@@ -99,6 +101,11 @@ pub enum Command {
     },
     /// Submit/activate (press Enter).
     Submit {
+        respond: oneshot::Sender<Result<(), String>>,
+    },
+    /// Send a key press.
+    KeyPress {
+        key: String,
         respond: oneshot::Sender<Result<(), String>>,
     },
 }
@@ -284,6 +291,28 @@ async fn run_server(cmd_tx: mpsc::Sender<Command>, shutdown: Arc<AtomicBool>) {
             Ok(Request::Ping) => {
                 let _ = conn.write(&Response::Pong).await;
             }
+            Ok(Request::KeyPress { key }) => {
+                let (tx, rx) = oneshot::channel();
+                if cmd_tx
+                    .send(Command::KeyPress { key, respond: tx })
+                    .await
+                    .is_err()
+                {
+                    let _ = conn.write(&Response::Error("App closed".into())).await;
+                    continue;
+                }
+                match tokio::time::timeout(std::time::Duration::from_secs(2), rx).await {
+                    Ok(Ok(Ok(()))) => {
+                        let _ = conn.write(&Response::Ok).await;
+                    }
+                    Ok(Ok(Err(e))) => {
+                        let _ = conn.write(&Response::Error(e)).await;
+                    }
+                    _ => {
+                        let _ = conn.write(&Response::Error("Timeout".into())).await;
+                    }
+                }
+            }
             Err(e) => {
                 eprintln!("[gtk-debug] Read error: {}", e);
             }
@@ -367,10 +396,52 @@ pub mod client {
         }
     }
 
-    /// Find running GTK debug servers.
+    /// Send a key press event.
+    pub fn key_press<P: AsRef<Path>>(socket: P, key: &str) -> Result<(), IpcError> {
+        let resp: Response = Client::call(
+            socket,
+            &Request::KeyPress {
+                key: key.to_string(),
+            },
+        )?;
+        match resp {
+            Response::Ok => Ok(()),
+            Response::Error(e) => Err(IpcError::Io(std::io::Error::other(e))),
+            _ => Err(IpcError::Io(std::io::Error::other("Unexpected response"))),
+        }
+    }
+
+    /// Find running GTK debug servers, cleaning up stale sockets.
     pub fn find_servers() -> Vec<PathBuf> {
         glob::glob("/tmp/gtk-debug-*.sock")
-            .map(|paths| paths.filter_map(Result::ok).collect())
+            .map(|paths| {
+                paths
+                    .filter_map(Result::ok)
+                    .filter(|path| {
+                        // Extract PID and check if process is still running
+                        if let Some(pid) = extract_pid(path) {
+                            if is_process_running(pid) {
+                                return true;
+                            }
+                            // Process is dead, remove stale socket
+                            let _ = std::fs::remove_file(path);
+                        }
+                        false
+                    })
+                    .collect()
+            })
             .unwrap_or_default()
+    }
+
+    fn extract_pid(path: &Path) -> Option<u32> {
+        path.file_name()
+            .and_then(|s| s.to_str())
+            .and_then(|s| s.strip_prefix("gtk-debug-"))
+            .and_then(|s| s.strip_suffix(".sock"))
+            .and_then(|s| s.parse().ok())
+    }
+
+    fn is_process_running(pid: u32) -> bool {
+        Path::new(&format!("/proc/{}", pid)).exists()
     }
 }
