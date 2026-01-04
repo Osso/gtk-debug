@@ -143,7 +143,7 @@ fn get_background_color(widget: &gtk::Widget) -> Option<String> {
 
     for name in color_names {
         if let Some(color) = ctx.lookup_color(name) {
-            return Some(rgba_to_hex(&color));
+            return Some(format!("{}={}", name, rgba_to_hex(&color)));
         }
     }
 
