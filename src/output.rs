@@ -177,6 +177,8 @@ pub struct LayoutEntry {
     pub sensitive: bool,
     pub css_classes: Vec<String>,
     pub widget_name: Option<String>,
+    /// Background color as hex (e.g., "#1e1e2e") if available
+    pub background_color: Option<String>,
 }
 
 impl LayoutEntry {
@@ -194,9 +196,10 @@ impl LayoutEntry {
             format!(" .{}", self.css_classes.join("."))
         };
         let name = self.widget_name.as_ref().map_or(String::new(), |n| format!(" #{}", n));
+        let bg = self.background_color.as_ref().map_or(String::new(), |c| format!(" bg:{}", c));
 
         format!(
-            "{}{} @ ({}, {}) {}x{}{}{}{}",
+            "{}{} @ ({}, {}) {}x{}{}{}{}{}",
             indent,
             self.info.short_desc(),
             self.x,
@@ -206,6 +209,7 @@ impl LayoutEntry {
             flags,
             classes,
             name,
+            bg,
         )
     }
 }

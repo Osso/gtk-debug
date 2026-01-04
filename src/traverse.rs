@@ -77,6 +77,7 @@ fn traverse_widget(widget: &gtk::Widget, depth: usize, dump: &mut LayoutDump) {
             let name = widget.widget_name();
             if name.is_empty() { None } else { Some(name.to_string()) }
         },
+        background_color: get_background_color(widget),
     };
 
     dump.push(entry);
@@ -102,6 +103,53 @@ fn get_allocation(widget: &gtk::Widget) -> (i32, i32, i32, i32) {
     }
 
     (0, 0, width, height)
+}
+
+/// Convert RGBA to hex color string.
+fn rgba_to_hex(rgba: &gtk::gdk::RGBA) -> String {
+    let r = (rgba.red() * 255.0) as u8;
+    let g = (rgba.green() * 255.0) as u8;
+    let b = (rgba.blue() * 255.0) as u8;
+    format!("#{:02x}{:02x}{:02x}", r, g, b)
+}
+
+/// Try to get the background color from a widget's style context.
+/// Falls back to foreground color if no background is found.
+fn get_background_color(widget: &gtk::Widget) -> Option<String> {
+    use gtk::prelude::StyleContextExt;
+
+    let ctx = widget.style_context();
+
+    // Try various color name patterns used by different apps/themes
+    let color_names = [
+        // libadwaita colors
+        "window_bg_color",
+        "view_bg_color",
+        "card_bg_color",
+        "headerbar_bg_color",
+        "popover_bg_color",
+        "dialog_bg_color",
+        "sidebar_bg_color",
+        "accent_bg_color",
+        // Older GTK3-style names (some themes still use these)
+        "theme_bg_color",
+        "theme_base_color",
+        "bg_color",
+        "base_color",
+        // Custom app colors
+        "ayu_bg",
+        "ayu_bg_card",
+    ];
+
+    for name in color_names {
+        if let Some(color) = ctx.lookup_color(name) {
+            return Some(rgba_to_hex(&color));
+        }
+    }
+
+    // Fall back to foreground color as theme indicator
+    let fg_color = ctx.color();
+    Some(format!("fg:{}", rgba_to_hex(&fg_color)))
 }
 
 fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
