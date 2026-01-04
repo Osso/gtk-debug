@@ -179,6 +179,8 @@ pub struct LayoutEntry {
     pub widget_name: Option<String>,
     /// Background color as hex (e.g., "#1e1e2e") if available
     pub background_color: Option<String>,
+    /// Foreground/text color as hex (e.g., "#ffffff") if available
+    pub foreground_color: Option<String>,
 }
 
 impl LayoutEntry {
@@ -197,9 +199,10 @@ impl LayoutEntry {
         };
         let name = self.widget_name.as_ref().map_or(String::new(), |n| format!(" #{}", n));
         let bg = self.background_color.as_ref().map_or(String::new(), |c| format!(" bg:{}", c));
+        let fg = self.foreground_color.as_ref().map_or(String::new(), |c| format!(" fg:{}", c));
 
         format!(
-            "{}{} @ ({}, {}) {}x{}{}{}{}{}",
+            "{}{} @ ({}, {}) {}x{}{}{}{}{}{}",
             indent,
             self.info.short_desc(),
             self.x,
@@ -210,6 +213,7 @@ impl LayoutEntry {
             classes,
             name,
             bg,
+            fg,
         )
     }
 }

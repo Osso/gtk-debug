@@ -78,6 +78,7 @@ fn traverse_widget(widget: &gtk::Widget, depth: usize, dump: &mut LayoutDump) {
             if name.is_empty() { None } else { Some(name.to_string()) }
         },
         background_color: get_background_color(widget),
+        foreground_color: get_foreground_color(widget),
     };
 
     dump.push(entry);
@@ -147,9 +148,16 @@ fn get_background_color(widget: &gtk::Widget) -> Option<String> {
         }
     }
 
-    // Fall back to foreground color as theme indicator
+    None
+}
+
+/// Get the foreground/text color from a widget's style context.
+fn get_foreground_color(widget: &gtk::Widget) -> Option<String> {
+    use gtk::prelude::StyleContextExt;
+
+    let ctx = widget.style_context();
     let fg_color = ctx.color();
-    Some(format!("fg:{}", rgba_to_hex(&fg_color)))
+    Some(rgba_to_hex(&fg_color))
 }
 
 fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
