@@ -69,6 +69,14 @@ enum Commands {
         /// Process ID (auto-detect if only one server running)
         pid: Option<u32>,
     },
+    /// Take a screenshot and save to file
+    Screenshot {
+        /// Output file path (WebP format)
+        #[arg(default_value = "screenshot.webp")]
+        output: PathBuf,
+        /// Process ID (auto-detect if only one server running)
+        pid: Option<u32>,
+    },
 }
 
 fn main() -> ExitCode {
@@ -224,6 +232,25 @@ fn main() -> ExitCode {
                 }
             }
         }
+        Commands::Screenshot { output, pid } => {
+            let socket = match get_socket(pid) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    return ExitCode::FAILURE;
+                }
+            };
+            match client::screenshot_to_file(&socket, &output) {
+                Ok(()) => {
+                    println!("Screenshot saved to {}", output.display());
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    ExitCode::FAILURE
+                }
+            }
+        }
     }
 }
 
@@ -243,7 +270,10 @@ fn get_socket(pid: Option<u32>) -> Result<PathBuf, String> {
             n => Err(format!(
                 "{} servers running, specify PID: {:?}",
                 n,
-                servers.iter().filter_map(|p| extract_pid(p)).collect::<Vec<_>>()
+                servers
+                    .iter()
+                    .filter_map(|p| extract_pid(p))
+                    .collect::<Vec<_>>()
             )),
         }
     }
