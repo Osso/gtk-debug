@@ -83,174 +83,120 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::List => {
-            let servers = client::find_servers();
-            if servers.is_empty() {
-                println!("No GTK debug servers running");
+        Commands::List => list_servers(),
+        Commands::Dump { pid } => dump_tree(pid),
+        Commands::DumpJson { pid } => dump_tree_json(pid),
+        Commands::Click { label, pid } => click_button(label, pid),
+        Commands::Input { field, value, pid } => input_field(field, value, pid),
+        Commands::Submit { pid } => submit_focused(pid),
+        Commands::Ping { pid } => ping_server(pid),
+        Commands::Key { key, pid } => send_key(key, pid),
+        Commands::Screenshot { output, pid } => take_screenshot(output, pid),
+    }
+}
+
+fn list_servers() -> ExitCode {
+    let servers = client::find_servers();
+    if servers.is_empty() {
+        println!("No GTK debug servers running");
+    } else {
+        println!("Running GTK debug servers:");
+        for path in servers {
+            if let Some(pid) = extract_pid(&path) {
+                println!("  PID {}: {}", pid, path.display());
             } else {
-                println!("Running GTK debug servers:");
-                for path in servers {
-                    if let Some(pid) = extract_pid(&path) {
-                        println!("  PID {}: {}", pid, path.display());
-                    } else {
-                        println!("  {}", path.display());
-                    }
-                }
-            }
-            ExitCode::SUCCESS
-        }
-        Commands::Dump { pid } => {
-            let socket = match get_socket(pid) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    return ExitCode::FAILURE;
-                }
-            };
-            match client::dump(&socket) {
-                Ok(layout) => {
-                    println!("{}", layout);
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    ExitCode::FAILURE
-                }
+                println!("  {}", path.display());
             }
         }
-        Commands::DumpJson { pid } => {
-            let socket = match get_socket(pid) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    return ExitCode::FAILURE;
-                }
-            };
-            match client::dump_json(&socket) {
-                Ok(layout) => {
-                    println!("{}", layout);
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    ExitCode::FAILURE
-                }
-            }
-        }
-        Commands::Click { label, pid } => {
-            let socket = match get_socket(pid) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    return ExitCode::FAILURE;
-                }
-            };
-            match client::click(&socket, &label) {
-                Ok(()) => {
-                    println!("Clicked button '{}'", label);
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    ExitCode::FAILURE
-                }
-            }
-        }
-        Commands::Input { field, value, pid } => {
-            let socket = match get_socket(pid) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    return ExitCode::FAILURE;
-                }
-            };
-            match client::input(&socket, &field, &value) {
-                Ok(()) => {
-                    println!("Set '{}' to '{}'", field, value);
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    ExitCode::FAILURE
-                }
-            }
-        }
-        Commands::Submit { pid } => {
-            let socket = match get_socket(pid) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    return ExitCode::FAILURE;
-                }
-            };
-            match client::submit(&socket) {
-                Ok(()) => {
-                    println!("Submitted");
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    ExitCode::FAILURE
-                }
-            }
-        }
-        Commands::Ping { pid } => {
-            let socket = match get_socket(pid) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    return ExitCode::FAILURE;
-                }
-            };
-            match client::ping(&socket) {
-                Ok(()) => {
-                    println!("Pong");
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    ExitCode::FAILURE
-                }
-            }
-        }
-        Commands::Key { key, pid } => {
-            let socket = match get_socket(pid) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    return ExitCode::FAILURE;
-                }
-            };
-            match client::key_press(&socket, &key) {
-                Ok(()) => {
-                    println!("Sent key '{}'", key);
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    ExitCode::FAILURE
-                }
-            }
-        }
-        Commands::Screenshot { output, pid } => {
-            let socket = match get_socket(pid) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    return ExitCode::FAILURE;
-                }
-            };
-            match client::screenshot_to_file(&socket, &output) {
-                Ok(()) => {
-                    println!("Screenshot saved to {}", output.display());
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    ExitCode::FAILURE
-                }
-            }
-        }
+    }
+    ExitCode::SUCCESS
+}
+
+fn dump_tree(pid: Option<u32>) -> ExitCode {
+    let socket = match get_socket(pid) {
+        Ok(s) => s,
+        Err(e) => { eprintln!("Error: {}", e); return ExitCode::FAILURE; }
+    };
+    match client::dump(&socket) {
+        Ok(layout) => { println!("{}", layout); ExitCode::SUCCESS }
+        Err(e) => { eprintln!("Error: {}", e); ExitCode::FAILURE }
+    }
+}
+
+fn dump_tree_json(pid: Option<u32>) -> ExitCode {
+    let socket = match get_socket(pid) {
+        Ok(s) => s,
+        Err(e) => { eprintln!("Error: {}", e); return ExitCode::FAILURE; }
+    };
+    match client::dump_json(&socket) {
+        Ok(layout) => { println!("{}", layout); ExitCode::SUCCESS }
+        Err(e) => { eprintln!("Error: {}", e); ExitCode::FAILURE }
+    }
+}
+
+fn click_button(label: String, pid: Option<u32>) -> ExitCode {
+    let socket = match get_socket(pid) {
+        Ok(s) => s,
+        Err(e) => { eprintln!("Error: {}", e); return ExitCode::FAILURE; }
+    };
+    match client::click(&socket, &label) {
+        Ok(()) => { println!("Clicked button '{}'", label); ExitCode::SUCCESS }
+        Err(e) => { eprintln!("Error: {}", e); ExitCode::FAILURE }
+    }
+}
+
+fn input_field(field: String, value: String, pid: Option<u32>) -> ExitCode {
+    let socket = match get_socket(pid) {
+        Ok(s) => s,
+        Err(e) => { eprintln!("Error: {}", e); return ExitCode::FAILURE; }
+    };
+    match client::input(&socket, &field, &value) {
+        Ok(()) => { println!("Set '{}' to '{}'", field, value); ExitCode::SUCCESS }
+        Err(e) => { eprintln!("Error: {}", e); ExitCode::FAILURE }
+    }
+}
+
+fn submit_focused(pid: Option<u32>) -> ExitCode {
+    let socket = match get_socket(pid) {
+        Ok(s) => s,
+        Err(e) => { eprintln!("Error: {}", e); return ExitCode::FAILURE; }
+    };
+    match client::submit(&socket) {
+        Ok(()) => { println!("Submitted"); ExitCode::SUCCESS }
+        Err(e) => { eprintln!("Error: {}", e); ExitCode::FAILURE }
+    }
+}
+
+fn ping_server(pid: Option<u32>) -> ExitCode {
+    let socket = match get_socket(pid) {
+        Ok(s) => s,
+        Err(e) => { eprintln!("Error: {}", e); return ExitCode::FAILURE; }
+    };
+    match client::ping(&socket) {
+        Ok(()) => { println!("Pong"); ExitCode::SUCCESS }
+        Err(e) => { eprintln!("Error: {}", e); ExitCode::FAILURE }
+    }
+}
+
+fn send_key(key: String, pid: Option<u32>) -> ExitCode {
+    let socket = match get_socket(pid) {
+        Ok(s) => s,
+        Err(e) => { eprintln!("Error: {}", e); return ExitCode::FAILURE; }
+    };
+    match client::key_press(&socket, &key) {
+        Ok(()) => { println!("Sent key '{}'", key); ExitCode::SUCCESS }
+        Err(e) => { eprintln!("Error: {}", e); ExitCode::FAILURE }
+    }
+}
+
+fn take_screenshot(output: PathBuf, pid: Option<u32>) -> ExitCode {
+    let socket = match get_socket(pid) {
+        Ok(s) => s,
+        Err(e) => { eprintln!("Error: {}", e); return ExitCode::FAILURE; }
+    };
+    match client::screenshot_to_file(&socket, &output) {
+        Ok(()) => { println!("Screenshot saved to {}", output.display()); ExitCode::SUCCESS }
+        Err(e) => { eprintln!("Error: {}", e); ExitCode::FAILURE }
     }
 }
 
