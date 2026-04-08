@@ -22,7 +22,6 @@ jobs:
         with:
           repository: Osso/gtk-layout-inspector
           path: lib/gtk-layout-inspector
-          token: ${{ secrets.GH_PAT }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
