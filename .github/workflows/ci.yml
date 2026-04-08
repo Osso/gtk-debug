@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_TARGET: x86_64-unknown-linux-gnu
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: cli/gtk-debug
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Osso/gtk-layout-inspector
+          path: lib/gtk-layout-inspector
+          token: ${{ secrets.GH_PAT }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli/gtk-debug
+
+      - name: Check formatting
+        run: cargo fmt --check
+        working-directory: cli/gtk-debug
+
+      - name: Clippy
+        run: cargo clippy
+        working-directory: cli/gtk-debug
+
+      - name: Build
+        run: cargo build --release
+        working-directory: cli/gtk-debug
+
+      - name: Run tests
+        run: cargo test
+        working-directory: cli/gtk-debug
