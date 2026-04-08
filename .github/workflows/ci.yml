@@ -23,6 +23,11 @@ jobs:
           repository: Osso/gtk-layout-inspector
           path: lib/gtk-layout-inspector
 
+      - uses: actions/checkout@v4
+        with:
+          repository: Osso/peercred-ipc
+          path: lib/peercred-ipc
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
