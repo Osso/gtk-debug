@@ -28,6 +28,9 @@ jobs:
           repository: Osso/peercred-ipc
           path: lib/peercred-ipc
 
+      - name: Install GTK4 dev libraries
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
