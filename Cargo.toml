@@ -5,6 +5,9 @@ edition = "2024"
 description = "CLI tool for interacting with GTK4 applications via debug socket"
 license = "MIT"
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)'] }
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 gtk-layout-inspector = { path = "../../lib/gtk-layout-inspector", features = ["server"] }

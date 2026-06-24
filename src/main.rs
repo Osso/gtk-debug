@@ -9,6 +9,8 @@
 //!   gtk-debug submit [PID]      # Activate focused widget
 //!   gtk-debug ping [PID]        # Check if app is responding
 
+#![cfg_attr(coverage_nightly, feature(coverage_attribute))]
+
 use clap::{Parser, Subcommand};
 use gtk_layout_inspector::server::client;
 use std::path::PathBuf;
@@ -79,6 +81,7 @@ enum Commands {
     },
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
@@ -95,6 +98,7 @@ fn main() -> ExitCode {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn list_servers() -> ExitCode {
     let servers = client::find_servers();
     if servers.is_empty() {
@@ -112,27 +116,23 @@ fn list_servers() -> ExitCode {
     ExitCode::SUCCESS
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn dump_tree(pid: Option<u32>) -> ExitCode {
-    let socket = match get_socket(pid) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            return ExitCode::FAILURE;
-        }
-    };
-    match client::dump(&socket) {
-        Ok(layout) => {
-            println!("{}", layout);
-            ExitCode::SUCCESS
-        }
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            ExitCode::FAILURE
-        }
-    }
+    dump_layout(pid, |path| client::dump(path))
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn dump_tree_json(pid: Option<u32>) -> ExitCode {
+    dump_layout(pid, |path| client::dump_json(path))
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn dump_layout<T, E, F>(pid: Option<u32>, fetch: F) -> ExitCode
+where
+    T: std::fmt::Display,
+    E: std::fmt::Display,
+    F: FnOnce(&std::path::Path) -> Result<T, E>,
+{
     let socket = match get_socket(pid) {
         Ok(s) => s,
         Err(e) => {
@@ -140,7 +140,7 @@ fn dump_tree_json(pid: Option<u32>) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match client::dump_json(&socket) {
+    match fetch(&socket) {
         Ok(layout) => {
             println!("{}", layout);
             ExitCode::SUCCESS
@@ -152,6 +152,7 @@ fn dump_tree_json(pid: Option<u32>) -> ExitCode {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn click_button(label: String, pid: Option<u32>) -> ExitCode {
     let socket = match get_socket(pid) {
         Ok(s) => s,
@@ -172,6 +173,7 @@ fn click_button(label: String, pid: Option<u32>) -> ExitCode {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn input_field(field: String, value: String, pid: Option<u32>) -> ExitCode {
     let socket = match get_socket(pid) {
         Ok(s) => s,
@@ -192,6 +194,7 @@ fn input_field(field: String, value: String, pid: Option<u32>) -> ExitCode {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn submit_focused(pid: Option<u32>) -> ExitCode {
     let socket = match get_socket(pid) {
         Ok(s) => s,
@@ -212,6 +215,7 @@ fn submit_focused(pid: Option<u32>) -> ExitCode {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn ping_server(pid: Option<u32>) -> ExitCode {
     let socket = match get_socket(pid) {
         Ok(s) => s,
@@ -232,6 +236,7 @@ fn ping_server(pid: Option<u32>) -> ExitCode {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn send_key(key: String, pid: Option<u32>) -> ExitCode {
     let socket = match get_socket(pid) {
         Ok(s) => s,
@@ -252,6 +257,7 @@ fn send_key(key: String, pid: Option<u32>) -> ExitCode {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn take_screenshot(output: PathBuf, pid: Option<u32>) -> ExitCode {
     let socket = match get_socket(pid) {
         Ok(s) => s,
@@ -272,16 +278,24 @@ fn take_screenshot(output: PathBuf, pid: Option<u32>) -> ExitCode {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn get_socket(pid: Option<u32>) -> Result<PathBuf, String> {
+    select_socket(pid, client::find_servers(), |path| path.exists())
+}
+
+fn select_socket(
+    pid: Option<u32>,
+    servers: Vec<PathBuf>,
+    exists: impl Fn(&PathBuf) -> bool,
+) -> Result<PathBuf, String> {
     if let Some(pid) = pid {
-        let path = PathBuf::from(format!("/tmp/gtk-debug-{}.sock", pid));
-        if path.exists() {
+        let path = socket_path_for_pid(pid);
+        if exists(&path) {
             Ok(path)
         } else {
             Err(format!("No debug server for PID {}", pid))
         }
     } else {
-        let servers = client::find_servers();
         match servers.len() {
             0 => Err("No GTK debug servers running".to_string()),
             1 => Ok(servers.into_iter().next().unwrap()),
@@ -297,10 +311,100 @@ fn get_socket(pid: Option<u32>) -> Result<PathBuf, String> {
     }
 }
 
-fn extract_pid(path: &PathBuf) -> Option<u32> {
+fn socket_path_for_pid(pid: u32) -> PathBuf {
+    PathBuf::from(format!("/tmp/gtk-debug-{}.sock", pid))
+}
+
+fn extract_pid(path: &std::path::Path) -> Option<u32> {
     path.file_name()
         .and_then(|s| s.to_str())
         .and_then(|s| s.strip_prefix("gtk-debug-"))
         .and_then(|s| s.strip_suffix(".sock"))
         .and_then(|s| s.parse().ok())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn socket_path_for_pid_uses_tmp_convention() {
+        assert_eq!(
+            socket_path_for_pid(1234),
+            PathBuf::from("/tmp/gtk-debug-1234.sock")
+        );
+    }
+
+    #[test]
+    fn extract_pid_accepts_only_debug_socket_names() {
+        assert_eq!(
+            extract_pid(PathBuf::from("/tmp/gtk-debug-1234.sock").as_path()),
+            Some(1234)
+        );
+        assert_eq!(
+            extract_pid(PathBuf::from("gtk-debug-9.sock").as_path()),
+            Some(9)
+        );
+        assert_eq!(
+            extract_pid(PathBuf::from("/tmp/gtk-debug-nope.sock").as_path()),
+            None
+        );
+        assert_eq!(
+            extract_pid(PathBuf::from("/tmp/other-1234.sock").as_path()),
+            None
+        );
+        assert_eq!(
+            extract_pid(PathBuf::from("/tmp/gtk-debug-1234.txt").as_path()),
+            None
+        );
+    }
+
+    #[test]
+    fn select_socket_uses_explicit_pid_when_socket_exists() {
+        let selected = select_socket(Some(77), vec![], |path| {
+            path == &PathBuf::from("/tmp/gtk-debug-77.sock")
+        })
+        .expect("pid socket");
+
+        assert_eq!(selected, PathBuf::from("/tmp/gtk-debug-77.sock"));
+    }
+
+    #[test]
+    fn select_socket_reports_missing_explicit_pid() {
+        let error = select_socket(Some(77), vec![], |_| false).expect_err("missing pid");
+
+        assert_eq!(error, "No debug server for PID 77");
+    }
+
+    #[test]
+    fn select_socket_auto_detects_zero_one_or_many_servers() {
+        assert_eq!(
+            select_socket(None, vec![], |_| true).expect_err("no servers"),
+            "No GTK debug servers running"
+        );
+
+        let only = PathBuf::from("/tmp/gtk-debug-10.sock");
+        assert_eq!(
+            select_socket(None, vec![only.clone()], |_| true).expect("one server"),
+            only
+        );
+
+        let error = select_socket(
+            None,
+            vec![
+                PathBuf::from("/tmp/gtk-debug-10.sock"),
+                PathBuf::from("/tmp/gtk-debug-20.sock"),
+            ],
+            |_| true,
+        )
+        .expect_err("many servers");
+
+        assert_eq!(error, "2 servers running, specify PID: [10, 20]");
+    }
+
+    #[test]
+    fn clap_definition_is_valid() {
+        Cli::command().debug_assert();
+    }
 }
